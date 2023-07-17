@@ -1,6 +1,7 @@
 # オブジェクト指向 練習
 
 import random
+import pymysql
 
 # Userクラス
 class User:
@@ -118,14 +119,112 @@ def game():
             if members[i%2].hands == 0:
                 print(members[i%2].name,"の勝利です！") 
                 # ゲーム終了
-                return
+                return members[i%2].name #親プレイヤーの名前を返す
 
         else:
             print(members[i%2].name,"の予想は外れました。")
 
     print("引き分けです")
 
+    return "draw"
+
+#ランキングを表示する
+def show_ranking(connection):
+
+    #cursorオブジェクトを取得(SQLの実行や結果の取得などができる)
+    with connection.cursor() as cursor:
+
+        # SELECT文:resultテーブルからnameカラムとcntカラムを取得(cntカラムの降順に並べ替え5件まで)
+        # ORDER BY 列名 ASC(昇順)/DESC(降順)
+        # LIMIT 取得件数
+        sql = "SELECT name,cnt FROM results ORDER BY cnt DESC LIMIT 5"
+        cursor.execute(sql) #SQL実行
+
+        # SELECT文の実行結果を取り出す
+        # listの各要素に各レコードがDictionary形式で取得される
+        # results = [{name:値,cnt:値},{name:値,cnt:値},{name:値,cnt:値},...]
+        results = cursor.fetchall()
+
+    #ランキングが存在しない場合の処理
+    if len(results) == 0:
+        print("ランキングデータはありません")
+        return # 関数を終了
+    
+    # 見出しの表示
+    print("rank Name Count")
+    print("--------------------------")
+
+    rank = 1 # 順位表示用変数
+    # 取得したレコードを順に表示
+    for result in results: # result = {name:値,cnt:値}
+        # Dictionaryオブジェクトのgetメゾット => 引数のkeyに対するvalueを取得する
+        print(str(rank) + "位 ", result.get("name"), " ", result.get("cnt"))
+        rank = rank + 1 #次のレコードの順位
+
+    answer = input("全ランキングを削除しますか？(Y:削除 / Y以外:終了) :")
+    if answer == "Y" or answer == "y":
+        # ランキングの削除
+        delete_ranking(connection)
+
+# ランキングを削除する
+def delete_ranking(connection):
+    with connection.cursor() as cursor:
+        sql = "DELETE FROM results"
+        cursor.execute(sql) # SQL実行
+        print("ランキングデータを削除しました")
+        connection.commit() # 実行結果保存
+
+# ランキングを登録する
+def regist_ranking(connection, name):
+
+    with connection.cursor() as cursor:
+        # nameカラムの値が、引数で受け付けたユーザー名と一致するレコードを取得
+        sql = "SELECT * FROM results WHERE name='"+ name + "'"
+        cursor.execute(sql) # SQL実行
+
+        # SELECT文の実行結果を取り出す
+        results = cursor.fetchall()
+
+        # SELECT文の実行結果が0件の場合 => 新規プレイヤー
+        if len(results) == 0:
+            # resultsテーブルにレコードを新規登録
+            sql = "INSERT INTO results SET name='" + name + "'"
+            # sql = "INSERT INTO results SET name='" + name + "',cnt=1
+
+def main():
+    connection = pymysql.connect(
+        host="localhost",
+        user="root",
+        password="1374",
+        db="pyapp",
+        charset="utf8",
+        cursorclass=pymysql.cursors.DictCursor, #SELECT文の結果をDictionary型で受け取るための記述
+    )
+
+    #メニューの表示
+    print("------指スマ！！------")
+    print("ランキングを見る：0")
+    print("ゲームを開始する：1")
+    print("終了する：0か1以外")
+    answer = input("> ")
+
+    if answer == "0":
+        #ランキングの表示
+        show_ranking(connection)
+
+    elif answer == "1":
+        #game関数を呼び出す
+        #戻り値として、ユーザーの名前 or "コンピューター" or "draw"が返る
+        winner = game()
+        #ユーザーが勝利した場合
+        if winner != "コンピューター" and winner != "draw":
+            #ランキングの登録/更新
+            regist_ranking(connection,winner)
+    
+    #MySQLとの接続を終了
+    connection.close()
+
 # Pythonファイル実行時にgame関数から処理を開始させる
 if __name__ == "__main__":
-    game()
+    main()
 
